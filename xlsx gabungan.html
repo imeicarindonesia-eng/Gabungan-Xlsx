@@ -1,0 +1,432 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Kendaraan -- Gabung & Edit</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <style>
+    * { box-sizing: border-box; font-family: Arial, sans-serif; }
+    body { 
+      background: #000; 
+      color: #fff; 
+      max-width: 1200px; 
+      margin: 0 auto; 
+      padding: 15px; 
+      min-height: 100vh; 
+    }
+    h1 { text-align: center; color: #ff2233; margin-bottom: 20px; font-size: 22px; }
+    h2 { font-size: 16px; margin: 15px 0 10px; color: #fbbf24; }
+
+    .upload-box {
+      border: 2px dashed #ff2233;
+      border-radius: 12px;
+      padding: 30px 20px;
+      text-align: center;
+      margin-bottom: 20px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .upload-box:hover { background: #1a1a1a; }
+    input[type="file"] { display: none; }
+    
+    .btn {
+      background: #ff2233;
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      font-size: 15px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      margin: 4px;
+    }
+    .btn:hover { background: #e01e2e; }
+    .btn:disabled { background: #444; cursor: not-allowed; opacity: 0.6; }
+    .btn-success { background: #34d399; color: #000; }
+    .btn-success:hover { background: #22c55e; }
+    .btn-group { text-align: center; margin: 15px 0; }
+
+    .file-list { margin: 15px 0; }
+    .file-item {
+      background: #1a1a1a;
+      padding: 10px 15px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .remove-btn {
+      background: #444;
+      color: white;
+      border: none;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 18px;
+    }
+    .remove-btn:hover { background: #ff2233; }
+
+    .table-container {
+      overflow-x: auto;
+      margin: 20px 0;
+      border: 1px solid #333;
+      border-radius: 8px;
+      background: #111;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 900px;
+    }
+    th, td {
+      border: 1px solid #333;
+      padding: 8px 10px;
+      text-align: left;
+      font-size: 14px;
+    }
+    th {
+      background: #ff2233;
+      color: white;
+      position: sticky;
+      top: 0;
+    }
+    td input {
+      background: #222;
+      color: #fff;
+      border: 1px solid #444;
+      padding: 4px 6px;
+      width: 100%;
+      font-size: 14px;
+      outline: none;
+    }
+    td input:focus { border-color: #34d399; }
+    
+    .status { 
+      margin: 12px 0; 
+      padding: 10px 15px; 
+      border-radius: 6px;
+      display: none;
+    }
+    .status.success { background: #0f3320; border: 1px solid #34d399; color: #34d399; display: block; }
+    .status.info { background: #1a2a44; border: 1px solid #22d3ee; color: #22d3ee; display: block; }
+    
+    .info-text { font-size: 13px; color: #aaa; text-align: center; margin-bottom: 15px; }
+    .empty-state { text-align: center; padding: 40px 20px; color: #666; }
+    
+    .stats-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 10px 0 20px;
+    }
+    .stat-item {
+      background: #1a1a1a;
+      padding: 8px 15px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .stat-item strong { color: #34d399; }
+  </style>
+</head>
+<body>
+
+<h1>🚛 Pengelola Data Kendaraan</h1>
+<p class="info-text">Pilih file Excel → Sistem membaca kolom secara otomatis → Edit langsung → Download hasil gabungan</p>
+
+<div class="upload-box" id="uploadBox">
+  <p style="font-size: 17px; margin-bottom: 8px;">📂 Klik atau Taruh File Excel di Sini</p>
+  <p style="font-size: 13px; color: #888;">Format: .xlsx, .xls -- Bisa pilih banyak sekaligus</p>
+  <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple>
+  <button class="btn" onclick="document.getElementById('fileInput').click()">Pilih File</button>
+</div>
+
+<div class="file-list" id="fileList"></div>
+
+<div class="btn-group">
+  <button class="btn" id="mergeBtn" onclick="mergeFiles()" disabled>🔄 Gabungkan File</button>
+  <button class="btn btn-success" id="downloadBtn" onclick="downloadFile()" disabled>💾 Download Hasil</button>
+  <button class="btn" onclick="clearAll()">🗑️ Bersihkan Semua</button>
+</div>
+
+<div class="stats-bar" id="statsBar" style="display:none;">
+  <div class="stat-item">📄 File: <strong id="fileCount">0</strong></div>
+  <div class="stat-item">📊 Data: <strong id="rowCount">0</strong> baris</div>
+  <div class="stat-item">📅 Terakhir: <strong id="lastUpdate">-</strong></div>
+</div>
+
+<div id="statusMsg" class="status"></div>
+
+<div class="table-container" id="tableContainer" style="display:none;">
+  <h2 style="padding: 10px 15px; margin: 0; background: #1a1a1a; border-bottom: 1px solid #333;">📋 Data Gabungan -- Klik pada sel untuk mengedit</h2>
+  <table id="dataTable">
+    <thead id="tableHead"></thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<script>
+// === KONFIGURASI KOLOM PINTAR ===
+const TARGET_COLUMNS = {
+  'nopol': ['nopol', 'no polisi', 'plat nomor', 'plat', 'no plat', 'platnomer', 'nomer plat'],
+  'nama_pemilik': ['nama pemilik', 'nama', 'pemilik', 'nama pelanggan', 'costumer name'],
+  'nik': ['nik', 'no ktp', 'nomor ktp'],
+  'nomor_rangka': ['nomor rangka', 'noka', 'no rangka', 'nomor rangka kendaraan'],
+  'nomor_mesin': ['nomor mesin', 'nosin', 'no mesin', 'nomor mesin kendaraan'],
+  'warna': ['warna', 'warna kendaraan'],
+  'tahun': ['tahun', 'tahun kendaraan', 'tahun pembuatan'],
+  'bbm': ['bbm', 'jenis bbm', 'bahan bakar'],
+  'alamat': ['alamat', 'alamat pemilik', 'wilayah'],
+  'no_bpkb': ['no bpkb', 'nomor bpkb', 'bpkb'],
+  'no_stnk': ['no stnk', 'nomor stnk', 'stnk'],
+  'merek': ['merek', 'merk'],
+  'tipe': ['tipe', 'type', 'tipe mobil', 'tipe motor', 'type mobil', 'type motor', 'seri']
+};
+
+// Urutan kolom yang akan ditampilkan di hasil akhir
+const FINAL_ORDER = [
+  'nopol', 'nama_pemilik', 'nik', 'nomor_rangka', 'nomor_mesin',
+  'warna', 'tahun', 'bbm', 'alamat', 'no_bpkb', 'no_stnk', 'merek', 'tipe'
+];
+
+const COLUMN_LABEL = {
+  'nopol': 'No. Polisi',
+  'nama_pemilik': 'Nama Pemilik',
+  'nik': 'NIK',
+  'nomor_rangka': 'Nomor Rangka',
+  'nomor_mesin': 'Nomor Mesin',
+  'warna': 'Warna',
+  'tahun': 'Tahun',
+  'bbm': 'Jenis BBM',
+  'alamat': 'Alamat',
+  'no_bpkb': 'No. BPKB',
+  'no_stnk': 'No. STNK',
+  'merek': 'Merek',
+  'tipe': 'Tipe'
+};
+
+let filesArray = [];
+let mergedData = [];
+let mappedHeaders = [];
+
+const fileInput = document.getElementById('fileInput');
+const fileList = document.getElementById('fileList');
+const mergeBtn = document.getElementById('mergeBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const uploadBox = document.getElementById('uploadBox');
+const tableContainer = document.getElementById('tableContainer');
+const statusMsg = document.getElementById('statusMsg');
+const statsBar = document.getElementById('statsBar');
+
+// Drag & drop
+uploadBox.addEventListener('dragover', e => { e.preventDefault(); uploadBox.style.background='#1a1a1a'; });
+uploadBox.addEventListener('dragleave', () => uploadBox.style.background='transparent');
+uploadBox.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadBox.style.background='transparent';
+  handleFiles(e.dataTransfer.files);
+});
+
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+function handleFiles(files) {
+  for (let file of files) {
+    if (!filesArray.some(f => f.name === file.name)) {
+      filesArray.push(file);
+    }
+  }
+  updateFileList();
+  showStatus(`✅ ${filesArray.length} file telah ditambahkan`, 'info');
+}
+
+function updateFileList() {
+  fileList.innerHTML = '';
+  filesArray.forEach((file, i) => {
+    const el = document.createElement('div');
+    el.className = 'file-item';
+    el.innerHTML = `
+      <span>📄 ${file.name}</span>
+      <button class="remove-btn" onclick="removeFile(${i})">×</button>
+    `;
+    fileList.appendChild(el);
+  });
+  mergeBtn.disabled = filesArray.length === 0;
+}
+
+window.removeFile = function(index) {
+  filesArray.splice(index, 1);
+  updateFileList();
+  if (filesArray.length === 0) clearAll();
+};
+
+// === FUNGSI UTAMA: PEMBACAAN CERDAS & PENGGABUNGAN ===
+async function mergeFiles() {
+  showStatus('⏳ Sedang membaca dan memproses file...', 'info');
+  mergedData = [];
+  let masterHeaders = null;
+
+  for (const file of filesArray) {
+    try {
+      const data = await readFile(file);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      
+      if (rows.length < 2) continue;
+      
+      // === PEMETAAN KOLOM PINTAR ===
+      const rawHeaders = rows[0].map(h => String(h || '').trim().toLowerCase());
+      
+      if (!masterHeaders) {
+        masterHeaders = mapColumns(rawHeaders);
+        mappedHeaders = masterHeaders;
+      }
+      
+      // Buat peta indeks kolom dari file ini ke kolom standar
+      const fileColumnMap = mapColumnsToIndices(rawHeaders, masterHeaders);
+      
+      // Proses setiap baris data
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r];
+        if (row.every(cell => !cell)) continue; // lewati baris kosong
+        
+        const record = {};
+        FINAL_ORDER.forEach(colKey => {
+          const idx = fileColumnMap[colKey];
+          record[colKey] = idx !== undefined && row[idx] !== undefined ? String(row[idx]).trim() : '';
+        });
+        mergedData.push(record);
+      }
+    } catch (err) {
+      console.error('Error baca file:', file.name, err);
+    }
+  }
+
+  renderTable();
+  updateStats();
+  downloadBtn.disabled = false;
+  showStatus(`✅ Berhasil! ${filesArray.length} file digabung → ${mergedData.length} baris data`, 'success');
+}
+
+// Memetakan nama kolom variasi ke nama standar
+function mapColumns(rawHeaders) {
+  const result = {};
+  for (const standardKey of FINAL_ORDER) {
+    const aliases = TARGET_COLUMNS[standardKey];
+    for (let h of rawHeaders) {
+      const ht = String(h).trim().toLowerCase();
+      if (aliases.some(alias => ht === alias || ht.includes(alias))) {
+        result[standardKey] = true;
+        break;
+      }
+    }
+    if (!result[standardKey]) result[standardKey] = false;
+  }
+  return result;
+}
+
+// Mencari indeks kolom di file saat ini
+function mapColumnsToIndices(rawHeaders, masterHeaders) {
+  const map = {};
+  for (const standardKey of Object.keys(masterHeaders)) {
+    const aliases = TARGET_COLUMNS[standardKey];
+    for (let i = 0; i < rawHeaders.length; i++) {
+      const ht = String(rawHeaders[i]).trim().toLowerCase();
+      if (aliases.some(alias => ht === alias || ht.includes(alias))) {
+        map[standardKey] = i;
+        break;
+      }
+    }
+  }
+  return map;
+}
+
+// === TAMPILAN TABEL & EDITING ===
+function renderTable() {
+  const thead = document.getElementById('tableHead');
+  const tbody = document.getElementById('tableBody');
+  
+  // Header
+  thead.innerHTML = '<tr>' + 
+    FINAL_ORDER.map(key => `<th>${COLUMN_LABEL[key]}</th>`).join('') + 
+  '</tr>';
+  
+  // Baris data dengan input edit
+  tbody.innerHTML = mergedData.map((row, rowIdx) => `
+    <tr>
+      ${FINAL_ORDER.map(key => `
+        <td><input type="text" value="${escapeHtml(row[key] || '')}" 
+           onchange="updateCell(${rowIdx}, '${key}', this.value)" /></td>
+      `).join('')}
+    </tr>
+  `).join('');
+  
+  tableContainer.style.display = 'block';
+}
+
+window.updateCell = function(rowIndex, key, value) {
+  mergedData[rowIndex][key] = value.trim();
+  updateStats();
+};
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML.replace(/"/g, '&quot;');
+}
+
+// === DOWNLOAD HASIL ===
+function downloadFile() {
+  // Ubah data ke format array untuk Excel
+  const exportData = [
+    FINAL_ORDER.map(key => COLUMN_LABEL[key]), // baris judul
+    ...mergedData.map(row => FINAL_ORDER.map(key => row[key] || ''))
+  ];
+  
+  const ws = XLSX.utils.aoa_to_sheet(exportData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Data Kendaraan');
+  
+  const namaFile = `Data_Kendaraan_Gabungan_${new Date().toISOString().slice(0,10)}.xlsx`;
+  XLSX.writeFile(wb, namaFile);
+  
+  showStatus(`✅ File terunduh: ${namaFile}`, 'success');
+}
+
+function clearAll() {
+  filesArray = [];
+  mergedData = [];
+  fileList.innerHTML = '';
+  tableContainer.style.display = 'none';
+  statusMsg.style.display = 'none';
+  statsBar.style.display = 'none';
+  mergeBtn.disabled = true;
+  downloadBtn.disabled = true;
+}
+
+function showStatus(text, type) {
+  statusMsg.textContent = text;
+  statusMsg.className = `status ${type}`;
+}
+
+function updateStats() {
+  document.getElementById('fileCount').textContent = filesArray.length;
+  document.getElementById('rowCount').textContent = mergedData.length;
+  document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('id-ID');
+  statsBar.style.display = 'flex';
+}
+
+function readFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+</script>
+
+</body>
+</html>
